@@ -182,7 +182,6 @@ def get_agent_ai():
 agent = get_agent_ai()
 
 # --- Caching the ML Pipeline results ---
-# Now takes uploaded_file_obj directly, and accesses agent_instance internally
 @st.cache_data(show_spinner="Running AI Agent Analysis...")
 def run_ml_pipeline(uploaded_file_obj, target_col, task_type):
     """
@@ -190,6 +189,11 @@ def run_ml_pipeline(uploaded_file_obj, target_col, task_type):
     Takes uploaded_file_obj (the Streamlit UploadedFile object), target_col, task_type.
     Returns best_model, best_metric, optimal_test_size, all_results, X_cols, original_categorical_cols.
     """
+    # --- ADDED CHECK FOR EMPTY FILE ---
+    if uploaded_file_obj.size == 0:
+        st.error("The uploaded CSV file is empty. Please upload a file with data.")
+        return None, None, None, pd.DataFrame(), None, None # Return empty DataFrame for results
+
     # Read the DataFrame from the uploaded file object inside the cached function
     df_input = pd.read_csv(uploaded_file_obj)
     df_copy = df_input.copy() # Work on a copy to avoid modifying cached df_input
@@ -201,7 +205,7 @@ def run_ml_pipeline(uploaded_file_obj, target_col, task_type):
     X, y, X_cols, original_categorical_cols = agent_instance._preprocess_data(df_copy, target_col, task_type, fit_scaler_encoder=True)
 
     if X is None or y is None:
-        return None, None, None, [], None, None
+        return None, None, None, pd.DataFrame(), None, None # Return empty DataFrame for results
 
     # Define test sizes to iterate for optimal split
     test_sizes = [0.1, 0.15, 0.2, 0.25, 0.3]
