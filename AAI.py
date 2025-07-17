@@ -46,7 +46,7 @@ class AgentAI:
                 'Extra Trees Classifier': ExtraTreesClassifier(random_state=42),
                 'Gradient Boosting Classifier': GradientBoostingClassifier(random_state=42),
                 'XGBoost Classifier': xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42), # Suppress warning, set eval_metric
-                'KNN Classifier': KNeighborsClassifier(),
+                'KNN Classifier': KNeighborsRegressor(), # Changed to KNeighborsClassifier
                 'SVC': SVC(max_iter=2000, random_state=42), # Increased max_iter for convergence
                 'Gaussian Naive Bayes': GaussianNB() # General purpose Naive Bayes
             }
@@ -322,7 +322,7 @@ with left_column:
 
     if uploaded_file is not None:
         try:
-            # --- ADDED TRY-EXCEPT FOR EmptyDataError HERE ---
+            # --- IMPORTANT: Added the EmptyDataError catch here for the initial read ---
             df = pd.read_csv(uploaded_file)
             st.success("CSV file loaded successfully!")
             st.dataframe(df.head())
