@@ -70,8 +70,6 @@ class AgentAI:
         X = df_processed.drop(columns=[target_column])
 
         # Store original categorical columns for consistent one-hot encoding later
-        # This needs to be stored persistently, perhaps in session_state or returned
-        # and passed around, or the agent instance itself (which is now cached).
         self.original_categorical_cols = X.select_dtypes(include='object').columns.tolist()
 
         # Handle missing values
@@ -184,14 +182,20 @@ def get_agent_ai():
 agent = get_agent_ai()
 
 # --- Caching the ML Pipeline results ---
+# Now takes uploaded_file_obj directly, and accesses agent_instance internally
 @st.cache_data(show_spinner="Running AI Agent Analysis...")
-def run_ml_pipeline(df_input, target_col, task_type, agent_instance):
+def run_ml_pipeline(uploaded_file_obj, target_col, task_type):
     """
     Encapsulates the entire ML pipeline for caching.
-    Takes df_input (the raw DataFrame), target_col, task_type, and the agent_instance.
+    Takes uploaded_file_obj (the Streamlit UploadedFile object), target_col, task_type.
     Returns best_model, best_metric, optimal_test_size, all_results, X_cols, original_categorical_cols.
     """
+    # Read the DataFrame from the uploaded file object inside the cached function
+    df_input = pd.read_csv(uploaded_file_obj)
     df_copy = df_input.copy() # Work on a copy to avoid modifying cached df_input
+
+    # Get the agent instance (already cached globally)
+    agent_instance = get_agent_ai() # Access it here
 
     # Preprocess data (fit scaler and encoder here)
     X, y, X_cols, original_categorical_cols = agent_instance._preprocess_data(df_copy, target_col, task_type, fit_scaler_encoder=True)
@@ -272,6 +276,7 @@ if 'chat_history' not in st.session_state:
 left_column, center_column, right_column = st.columns([2, 4, 2])
 
 # Initialize variables to None or default values
+# These will be populated by the cached run_ml_pipeline or user input
 df = None
 target_column_name = None
 selected_task = None
@@ -289,6 +294,7 @@ with left_column:
 
     if uploaded_file is not None:
         try:
+            # Read df here for display and initial column selection
             df = pd.read_csv(uploaded_file)
             st.success("CSV file loaded successfully!")
             st.dataframe(df.head())
@@ -331,10 +337,10 @@ with left_column:
 
 with center_column:
     st.header("🧠 Agent AI Performance")
-    if df is not None and target_column_name and selected_task:
-        # Call the cached ML pipeline function
+    if uploaded_file is not None and target_column_name and selected_task:
+        # Call the cached ML pipeline function. Pass the uploaded_file object directly.
         overall_best_model, overall_best_metric, optimal_test_size, all_results_df, X_cols, original_categorical_cols = run_ml_pipeline(
-            df, target_column_name, selected_task, agent
+            uploaded_file, target_column_name, selected_task
         )
 
         if overall_best_model:
@@ -369,7 +375,7 @@ with center_column:
         ai_response = ""
 
         # Check if analysis results are available before responding
-        if overall_best_model is None:
+        if overall_best_model is None: # This check relies on the cached output
             ai_response = "I need to complete the data analysis first before I can answer questions about models or performance. Please upload your data and select a target column."
         elif "best model" in chat_input_lower:
             ai_response = f"The best model for this task is **{overall_best_model}** with a performance metric of **{overall_best_metric:.4f}** achieved with a **{optimal_test_size*100:.0f}%** test split."
@@ -401,13 +407,15 @@ with center_column:
         # Rerun the app to display the new message and clear the input
         st.rerun()
     else:
-        st.info("Upload a CSV file and select a target column to start the analysis.")
+        # This message will only show if no file is uploaded yet
+        if uploaded_file is None:
+            st.info("Upload a CSV file and select a target column to start the analysis.")
 
 
 with right_column:
     st.header("🚀 Make a Prediction")
     # Ensure all necessary variables are available from the cached pipeline
-    if df is not None and target_column_name and selected_task and overall_best_model and X_cols is not None and original_categorical_cols is not None:
+    if uploaded_file is not None and target_column_name and selected_task and overall_best_model and X_cols is not None and original_categorical_cols is not None:
         st.markdown(f"Using the best model: **`{overall_best_model}`**")
         st.markdown("---")
         st.subheader("Manual Input for Prediction")
