@@ -14,8 +14,13 @@ import numpy as np
 
 # Define AI agent class
 class AgentAI:
-    # ... (rest of the class remains the same)
-
+    def __init__(self):
+        # Initialize StandardScaler for numerical feature scaling
+        self.scaler = StandardScaler()
+        # Initialize LabelEncoder for target variable encoding in classification
+        self.label_encoder = LabelEncoder()
+        # Store trained models and their associated preprocessing objects (e.g., PolynomialFeatures)
+        self.trained_models = {}
 # Create an instance of the AI agent
 agent = AgentAI()
 
