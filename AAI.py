@@ -46,7 +46,7 @@ class AgentAI:
                 'Extra Trees Classifier': ExtraTreesClassifier(random_state=42),
                 'Gradient Boosting Classifier': GradientBoostingClassifier(random_state=42),
                 'XGBoost Classifier': xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42), # Suppress warning, set eval_metric
-                'KNN Classifier': KNeighborsRegressor(), # Changed to KNeighborsClassifier
+                'KNN Classifier': KNeighborsClassifier(), # Corrected from KNeighborsRegressor
                 'SVC': SVC(max_iter=2000, random_state=42), # Increased max_iter for convergence
                 'Gaussian Naive Bayes': GaussianNB() # General purpose Naive Bayes
             }
@@ -195,7 +195,15 @@ def run_ml_pipeline_cached(uploaded_file_obj, target_col, task_type):
         return None, None, None, pd.DataFrame(), None, None # Return empty DataFrame for results
 
     # Read the DataFrame from the uploaded file object inside the cached function
-    df_input = pd.read_csv(uploaded_file_obj)
+    try:
+        df_input = pd.read_csv(uploaded_file_obj)
+    except pd.errors.EmptyDataError:
+        st.error("The uploaded CSV file is empty or contains no data columns. Please upload a valid CSV file.")
+        return None, None, None, pd.DataFrame(), None, None
+    except Exception as e:
+        st.error(f"Error reading CSV file: {e}")
+        return None, None, None, pd.DataFrame(), None, None
+
     df_copy = df_input.copy() # Work on a copy to avoid modifying cached df_input
 
     # Get the agent instance (already cached globally)
