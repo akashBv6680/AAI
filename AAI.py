@@ -325,9 +325,9 @@ with left_column:
                 'df_loaded_hash': None # Reset hash
             }
             st.session_state.chat_history = [] # Clear chat history too
-            st.info("New file uploaded. Please select target and run analysis.")
-            st.rerun() # Rerun to reflect cleared state and allow new selections
-
+            st.info("New file uploaded. Please select target and task type.")
+            # No rerun here, let the main flow continue to allow selection of target/task
+    
     if uploaded_file is not None:
         try:
             # --- IMPORTANT: Added the EmptyDataError catch here for the initial read ---
@@ -350,8 +350,8 @@ with left_column:
                     'df_loaded_hash': None
                 }
                 st.session_state.chat_history = []
-                st.info("Target column changed. Please run analysis.")
-                st.rerun()
+                st.info("Target column changed. Analysis will re-run automatically.")
+                # No rerun here, let the main flow continue to allow selection of task type
 
 
             if target_column_name:
@@ -381,8 +381,8 @@ with left_column:
                         'df_loaded_hash': None
                     }
                     st.session_state.chat_history = []
-                    st.info("Task type changed. Please run analysis.")
-                    st.rerun()
+                    st.info("Task type changed. Analysis will re-run automatically.")
+                    # No rerun here, let the main flow continue
 
                 if selected_task_override == "Auto-Detect":
                     selected_task = detected_task
@@ -394,25 +394,6 @@ with left_column:
                 st.subheader("⚙️ Training Parameters")
                 st.write("The agent will automatically find the best `test_size` between 0.1 and 0.3 for optimal model performance.")
                 st.slider("Initial Test Size View (for reference)", min_value=0.1, max_value=0.3, step=0.05, value=0.2, disabled=True)
-
-                # --- Run Analysis Button ---
-                if st.button("🚀 Run Analysis"):
-                    if uploaded_file is not None and target_column_name and selected_task:
-                        # Call the cached ML pipeline function
-                        (
-                            st.session_state.analysis_results['overall_best_model'],
-                            st.session_state.analysis_results['overall_best_metric'],
-                            st.session_state.analysis_results['optimal_test_size'],
-                            st.session_state.analysis_results['all_results_df'],
-                            st.session_state.analysis_results['X_cols'],
-                            st.session_state.analysis_results['original_categorical_cols']
-                        ) = run_ml_pipeline_cached(uploaded_file, target_column_name, selected_task)
-                        st.session_state.analysis_results['df_loaded_hash'] = uploaded_file.file_id # Store hash of current file
-                        st.session_state.chat_history = [] # Clear chat history on new analysis run
-                        st.rerun() # Rerun to display results
-                    else:
-                        st.warning("Please ensure a CSV file is uploaded, target column is selected, and task type is determined before running analysis.")
-
 
         except pd.errors.EmptyDataError:
             st.error("The uploaded CSV file is empty or contains no data columns. Please upload a valid CSV file.")
@@ -430,7 +411,32 @@ with center_column:
     overall_best_metric = st.session_state.analysis_results['overall_best_metric']
     optimal_test_size = st.session_state.analysis_results['optimal_test_size']
     all_results_df = st.session_state.analysis_results['all_results_df']
-    # X_cols and original_categorical_cols are also in session_state, but used in prediction section
+    X_cols = st.session_state.analysis_results['X_cols']
+    original_categorical_cols = st.session_state.analysis_results['original_categorical_cols']
+
+    # --- AUTOMATIC EXECUTION LOGIC ---
+    # Check if a file is loaded, target and task are selected, AND analysis results are NOT already present for current inputs
+    if (uploaded_file is not None and target_column_name and selected_task and
+        (st.session_state.analysis_results['overall_best_model'] is None or
+         st.session_state.analysis_results['df_loaded_hash'] != uploaded_file.file_id or
+         st.session_state.target_col_id != target_column_name or # Re-check against current values
+         st.session_state.task_type_id != selected_task)): # Re-check against current values
+
+        st.info("Running analysis automatically...")
+        # Call the cached ML pipeline function
+        (
+            st.session_state.analysis_results['overall_best_model'],
+            st.session_state.analysis_results['overall_best_metric'],
+            st.session_state.analysis_results['optimal_test_size'],
+            st.session_state.analysis_results['all_results_df'],
+            st.session_state.analysis_results['X_cols'],
+            st.session_state.analysis_results['original_categorical_cols']
+        ) = run_ml_pipeline_cached(uploaded_file, target_column_name, selected_task)
+        st.session_state.analysis_results['df_loaded_hash'] = uploaded_file.file_id # Store hash of current file
+        st.session_state.chat_history = [] # Clear chat history on new analysis run
+        st.rerun() # Rerun to display results after analysis completes
+    # --- END AUTOMATIC EXECUTION LOGIC ---
+
 
     # Display analysis results only if they exist in session state
     if overall_best_model:
@@ -444,9 +450,10 @@ with center_column:
             # Display results, sorting by metric
             st.dataframe(all_results_df.sort_values(by='Metric', ascending=False))
     elif uploaded_file is not None and target_column_name and selected_task:
-        st.info("Analysis not yet run or results cleared. Click 'Run Analysis' to proceed.")
+        # This message will show while analysis is running or if it failed
+        st.info("Analysis is running or waiting for valid inputs. Please wait...")
     else:
-        st.info("Upload a CSV file, select a target column, and click 'Run Analysis' to see performance.")
+        st.info("Upload a CSV file and select a target column to start the analysis.")
 
 
     st.subheader("💬 Chat with Agent AI")
@@ -472,7 +479,7 @@ with center_column:
 
         # Check if analysis results are available before responding
         if overall_best_model_chat is None:
-            ai_response = "I need to complete the data analysis first before I can answer questions about models or performance. Please upload your data and click 'Run Analysis'."
+            ai_response = "I need to complete the data analysis first before I can answer questions about models or performance. Please upload your data and ensure the analysis has run."
         elif "best model" in chat_input_lower:
             ai_response = f"The best model for this task is **{overall_best_model_chat}** with a performance metric of **{overall_best_metric_chat:.4f}** achieved with a **{optimal_test_size_chat*100:.0f}%** test split."
         elif "model performance" in chat_input_lower or "how good" in chat_input_lower:
@@ -603,4 +610,4 @@ with right_column:
             except Exception as e:
                 st.error(f"Error during manual prediction: {e}")
     else:
-        st.info("Please load data, select a target, and click 'Run Analysis' to enable manual prediction.")
+        st.info("Please load data, select a target, and allow analysis to complete to enable manual prediction.")
