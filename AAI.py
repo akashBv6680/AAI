@@ -322,7 +322,7 @@ with left_column:
 
     if uploaded_file is not None:
         try:
-            # Read df here for display and initial column selection
+            # --- ADDED TRY-EXCEPT FOR EmptyDataError HERE ---
             df = pd.read_csv(uploaded_file)
             st.success("CSV file loaded successfully!")
             st.dataframe(df.head())
@@ -406,6 +406,9 @@ with left_column:
                         st.warning("Please ensure a CSV file is uploaded, target column is selected, and task type is determined before running analysis.")
 
 
+        except pd.errors.EmptyDataError:
+            st.error("The uploaded CSV file is empty or contains no data columns. Please upload a valid CSV file.")
+            df = None # Ensure df is None if file is empty
         except Exception as e:
             st.error(f"Error loading file or selecting target: {e}")
             df = None # Reset df if there's an error
@@ -490,8 +493,8 @@ with right_column:
     X_cols = st.session_state.analysis_results['X_cols']
     original_categorical_cols = st.session_state.analysis_results['original_categorical_cols']
 
-    # Only show prediction section if analysis results are available
-    if uploaded_file is not None and target_column_name and selected_task and overall_best_model and X_cols is not None and original_categorical_cols is not None:
+    # Only show prediction section if analysis results are available AND df is loaded (for feature names)
+    if df is not None and target_column_name and selected_task and overall_best_model and X_cols is not None and original_categorical_cols is not None:
         st.markdown(f"Using the best model: **`{overall_best_model}`**")
         st.markdown("---")
         st.subheader("Manual Input for Prediction")
